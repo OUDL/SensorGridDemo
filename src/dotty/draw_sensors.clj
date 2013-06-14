@@ -5,7 +5,7 @@
 (def SENSOR_LINE_WIDTH 5.0)
 
 (defn draw-sensor-point
-  [x y col row t]
+  [t [[col row] { :keys [x y] }]]
   (let [t (* t 0.1)
         n (qc/noise col row t)
         r (+ 1 (* n 4))]
@@ -13,26 +13,21 @@
     (qc/ellipse x y r r)))
 
 (defn update-sensor-point
-  [{:keys [x y] :as sensor} [col row] tick-atom]
+  [tick-atom new-grid [[col row :as col-row] { :keys [x y] :as sensor }]]
   (let [t (* 0.01 @tick-atom)
         t (+ (rand 0.01) t) ;; Make a randomness of points little smoother.
         pos (+ col (* NCOLS row))
         new-x (+ (* (- NCOLS col 1) CW) (* CW (qc/noise pos t)))
-        new-y (+ (* row RH) (* RH (qc/noise pos (+ 5.2 t))))]
-    (do
-      (draw-sensor-point new-x new-y col row @tick-atom)
-      (-> sensor
-          (assoc-in [:x] new-x)
-          (assoc-in [:y] new-y)))))
-
-(defn draw-sensor-points
-  [grid-sensors-atom tick-atom]
-  (dorun
-   (for [col-row (keys @grid-sensors-atom)
-         :let [sensor (@grid-sensors-atom col-row)
-               updated (update-sensor-point sensor col-row tick-atom)]]
-     (swap! grid-sensors-atom #(assoc-in % [col-row] updated)))))
+        new-y (+ (* row RH) (* RH (qc/noise pos (+ 5.2 t))))
+        new-sensor (-> (assoc sensor :x new-x)
+                       (assoc :y new-y))]
+    (assoc new-grid col-row new-sensor)))
 
 (defn draw-sensor-grid
   [grid-sensors-atom tick-atom]
-  (draw-sensor-points grid-sensors-atom tick-atom))
+
+  (dorun
+   (map (partial draw-sensor-point @tick-atom) @grid-sensors-atom))
+  (let [new-grid (doall
+                  (reduce (partial update-sensor-point tick-atom) {} @grid-sensors-atom))]
+    (reset! grid-sensors-atom new-grid)))
